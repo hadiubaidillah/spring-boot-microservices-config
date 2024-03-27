@@ -1,0 +1,89 @@
+app:
+    eureka-server: localhost
+eureka:
+    client:
+        serviceUrl:
+            defaultZone: http://admin:1234@localhost:8761/eureka
+logging:
+    level:
+        org:
+            springframework:
+                cloud:
+                    gateway: TRACE
+                    gateway.route.RouteDefinitionLocator: INFO
+        root: INFO
+management:
+    endpoints:
+        web:
+            exposure:
+                include: health, info, metrics, prometheus
+    metrics:
+        distribution:
+            percentiles-histogram:
+                http:
+                    server:
+                        requests: true
+    observations:
+        key-values:
+            application: sbm-api-gateway
+    tracing:
+        sampling:
+            probability: 1.0
+    zipkin:
+        tracing:
+            endpoint: http://localhost:9411/api/v2/spans
+server:
+    port: 8080
+spring:
+    application:
+        name: sbm-api-gateway
+    cloud:
+        gateway:
+            default-filters:
+                - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+            discovery:
+                locator:
+                    enabled: true
+            globalcors:
+                cors-configurations:
+                    '[/**]':
+                        allowedOrigins: "http://localhost:5173"
+                        allowedMethods: '*'
+                        allowedHeaders: '*'
+            routes:
+                -   id: sbm-product-service
+                    uri: lb://sbm-product-service
+                    predicates:
+                        - Path=/api/product
+                -   id: sbm-order-service
+                    uri: lb://sbm-order-service
+                    predicates:
+                        - Path=/api/order
+                -   id: sbm-inventory-service
+                    uri: lb://sbm-inventory-service
+                    predicates:
+                        - Path=/api/inventory
+                -   id: sbm-discovery-server
+                    uri: http://${app.eureka-server}:8761
+                    predicates:
+                        - Path=/eureka/web
+                    filters:
+                        - SetPath=/
+                -   id: sbm-discovery-server-static
+                    uri: http://${app.eureka-server}:8761
+                    predicates:
+                        - Path=/eureka/**
+                -   id: sbm-tasks-service
+                    uri: lb://sbm-tasks-service
+                    predicates:
+                        - Path=/api/tasks/**
+                        - Path=/api/tasks
+                    filter:
+                        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+                        - RewritePath=/api/tasks/(?<segment>.*),/api/tasks/${segment}
+
+    security:
+        oauth2:
+            resourceserver:
+                jwt:
+                    issuerUri: http://localhost:8181/realms/spring-boot-microservices-realm
